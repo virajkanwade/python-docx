@@ -17,10 +17,12 @@ from docx.image.jpeg import Exif, Jfif
 from docx.image.png import Png
 from docx.image.tiff import Tiff
 from docx.opc.constants import CONTENT_TYPE as CT
+from docx.shared import Emu, Length
 
 from ..unitutil.file import test_file
 from ..unitutil.mock import (
-    function_mock, class_mock, initializer_mock, instance_mock, method_mock
+    function_mock, class_mock, initializer_mock, instance_mock, method_mock,
+    property_mock
 )
 
 
@@ -71,11 +73,32 @@ class DescribeImage(object):
         image = Image(None, None, image_header_)
         assert image.content_type == content_type
 
-    def it_knows_the_image_dimensions(self, dimensions_fixture):
+    def it_knows_the_image_px_dimensions(self, dimensions_fixture):
         image_header_, px_width, px_height = dimensions_fixture
         image = Image(None, None, image_header_)
         assert image.px_width == px_width
         assert image.px_height == px_height
+
+    def it_knows_the_horz_and_vert_dpi_of_the_image(self, dpi_fixture):
+        image_header_, horz_dpi, vert_dpi = dpi_fixture
+        image = Image(None, None, image_header_)
+        assert image.horz_dpi == horz_dpi
+        assert image.vert_dpi == vert_dpi
+
+    def it_knows_the_image_native_size(self, size_fixture):
+        image, width, height = size_fixture
+        assert (image.width, image.height) == (width, height)
+        assert isinstance(image.width, Length)
+        assert isinstance(image.height, Length)
+
+    def it_can_scale_its_dimensions(self, scale_fixture):
+        image, width, height, expected_value = scale_fixture
+
+        scaled_width, scaled_height = image.scaled_dimensions(width, height)
+
+        assert (scaled_width, scaled_height) == expected_value
+        assert isinstance(scaled_width, Length)
+        assert isinstance(scaled_height, Length)
 
     def it_knows_the_image_filename(self):
         filename = 'foobar.png'
@@ -85,12 +108,6 @@ class DescribeImage(object):
     def it_knows_the_image_filename_extension(self):
         image = Image(None, 'foobar.png', None)
         assert image.ext == 'png'
-
-    def it_knows_the_horz_and_vert_dpi_of_the_image(self, dpi_fixture):
-        image_header_, horz_dpi, vert_dpi = dpi_fixture
-        image = Image(None, None, image_header_)
-        assert image.horz_dpi == horz_dpi
-        assert image.vert_dpi == vert_dpi
 
     def it_knows_the_sha1_of_its_image(self):
         blob = b'fO0Bar'
@@ -114,16 +131,6 @@ class DescribeImage(object):
     # fixtures -------------------------------------------------------
 
     @pytest.fixture
-    def blob_(self, request):
-        return instance_mock(request, bytes)
-
-    @pytest.fixture
-    def BytesIO_(self, request, stream_):
-        return class_mock(
-            request, 'docx.image.image.BytesIO', return_value=stream_
-        )
-
-    @pytest.fixture
     def content_type_fixture(self, image_header_):
         content_type = 'image/foobar'
         image_header_.content_type = content_type
@@ -142,10 +149,6 @@ class DescribeImage(object):
         image_header_.horz_dpi = horz_dpi
         image_header_.vert_dpi = vert_dpi
         return image_header_, horz_dpi, vert_dpi
-
-    @pytest.fixture
-    def filename_(self, request):
-        return instance_mock(request, str)
 
     @pytest.fixture
     def from_blob_fixture(
@@ -179,11 +182,68 @@ class DescribeImage(object):
             Image__init_, filename_out
         )
 
+    @pytest.fixture(params=[0, 1, 2, 3, 4, 5, 6, 7, 8])
+    def known_image_fixture(self, request):
+        cases = (
+            ('python.bmp',       ('bmp',  CT.BMP,   211,   71,  96,  96)),
+            ('sonic.gif',        ('gif',  CT.GIF,   290,  360,  72,  72)),
+            ('python-icon.jpeg', ('jpg',  CT.JPEG,  204,  204,  72,  72)),
+            ('300-dpi.jpg',      ('jpg',  CT.JPEG, 1504, 1936, 300, 300)),
+            ('monty-truth.png',  ('png',  CT.PNG,   150,  214,  72,  72)),
+            ('150-dpi.png',      ('png',  CT.PNG,   901, 1350, 150, 150)),
+            ('300-dpi.png',      ('png',  CT.PNG,   860,  579, 300, 300)),
+            ('72-dpi.tiff',      ('tiff', CT.TIFF,   48,   48,  72,  72)),
+            ('300-dpi.TIF',      ('tiff', CT.TIFF, 2464, 3248, 300, 300)),
+            # ('CVS_LOGO.WMF',     ('wmf',  CT.X_WMF, 149,   59,  72,  72)),
+        )
+        image_filename, characteristics = cases[request.param]
+        return image_filename, characteristics
+
+    @pytest.fixture(params=[
+        (None, None, 1000, 2000),
+        (100,  None,  100,  200),
+        (None,  500,  250,  500),
+        (1500, 1500, 1500, 1500),
+    ])
+    def scale_fixture(self, request, width_prop_, height_prop_):
+        width, height, scaled_width, scaled_height = request.param
+        width_prop_.return_value = Emu(1000)
+        height_prop_.return_value = Emu(2000)
+        image = Image(None, None, None)
+        return image, width, height, (scaled_width, scaled_height)
+
+    @pytest.fixture
+    def size_fixture(self, image_header_):
+        image_header_.px_width, image_header_.px_height = 150, 75
+        image_header_.horz_dpi, image_header_.vert_dpi = 72, 200
+        image = Image(None, None, image_header_)
+        return image, 1905000, 342900
+
+    # fixture components ---------------------------------------------
+
+    @pytest.fixture
+    def blob_(self, request):
+        return instance_mock(request, bytes)
+
+    @pytest.fixture
+    def BytesIO_(self, request, stream_):
+        return class_mock(
+            request, 'docx.image.image.BytesIO', return_value=stream_
+        )
+
+    @pytest.fixture
+    def filename_(self, request):
+        return instance_mock(request, str)
+
     @pytest.fixture
     def _from_stream_(self, request, image_):
         return method_mock(
             request, Image, '_from_stream', return_value=image_
         )
+
+    @pytest.fixture
+    def height_prop_(self, request):
+        return property_mock(request, Image, 'height')
 
     @pytest.fixture
     def image_(self, request):
@@ -204,26 +264,13 @@ class DescribeImage(object):
     def Image__init_(self, request):
         return initializer_mock(request, Image)
 
-    @pytest.fixture(params=[0, 1, 2, 3, 4, 5, 6, 7, 8])
-    def known_image_fixture(self, request):
-        cases = (
-            ('python.bmp',       ('bmp',  CT.BMP,   211,   71,  96,  96)),
-            ('sonic.gif',        ('gif',  CT.GIF,   290,  360,  72,  72)),
-            ('python-icon.jpeg', ('jpg',  CT.JPEG,  204,  204,  72,  72)),
-            ('300-dpi.jpg',      ('jpg',  CT.JPEG, 1504, 1936, 300, 300)),
-            ('monty-truth.png',  ('png',  CT.PNG,   150,  214,  72,  72)),
-            ('150-dpi.png',      ('png',  CT.PNG,   901, 1350, 150, 150)),
-            ('300-dpi.png',      ('png',  CT.PNG,   860,  579, 300, 300)),
-            ('72-dpi.tiff',      ('tiff', CT.TIFF,   48,   48,  72,  72)),
-            ('300-dpi.TIF',      ('tiff', CT.TIFF, 2464, 3248, 300, 300)),
-            # ('CVS_LOGO.WMF',     ('wmf',  CT.X_WMF, 149,   59,  72,  72)),
-        )
-        image_filename, characteristics = cases[request.param]
-        return image_filename, characteristics
-
     @pytest.fixture
     def stream_(self, request):
         return instance_mock(request, BytesIO)
+
+    @pytest.fixture
+    def width_prop_(self, request):
+        return property_mock(request, Image, 'width')
 
 
 class Describe_ImageHeaderFactory(object):

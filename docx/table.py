@@ -7,8 +7,9 @@ The |Table| object and related proxy classes.
 from __future__ import absolute_import, print_function, unicode_literals
 
 from .blkcntnr import BlockItemContainer
+from .enum.style import WD_STYLE_TYPE
 from .oxml.simpletypes import ST_Merge
-from .shared import lazyproperty, Parented
+from .shared import Inches, lazyproperty, Parented
 
 
 class Table(Parented):
@@ -17,16 +18,19 @@ class Table(Parented):
     """
     def __init__(self, tbl, parent):
         super(Table, self).__init__(parent)
-        self._tbl = tbl
+        self._element = self._tbl = tbl
 
-    def add_column(self):
+    def add_column(self, width):
         """
-        Return a |_Column| instance, newly added rightmost to the table.
+        Return a |_Column| object of *width*, newly added rightmost to the
+        table.
         """
         tblGrid = self._tbl.tblGrid
         gridCol = tblGrid.add_gridCol()
+        gridCol.w = width
         for tr in self._tbl.tr_lst:
-            tr.add_tc()
+            tc = tr.add_tc()
+            tc.width = width
         return _Column(gridCol, self)
 
     def add_row(self):
@@ -36,7 +40,8 @@ class Table(Parented):
         tbl = self._tbl
         tr = tbl.add_tr()
         for gridCol in tbl.tblGrid.gridCol_lst:
-            tr.add_tc()
+            tc = tr.add_tc()
+            tc.width = gridCol.w
         return _Row(tr, self)
 
     @property
@@ -86,7 +91,8 @@ class Table(Parented):
     @lazyproperty
     def columns(self):
         """
-        |_Columns| instance containing the sequence of rows in this table.
+        |_Columns| instance representing the sequence of columns in this
+        table.
         """
         return _Columns(self._tbl, self)
 
@@ -109,15 +115,25 @@ class Table(Parented):
     @property
     def style(self):
         """
-        String name of style to be applied to this table, e.g.
-        'LightShading-Accent1'. Name is derived by removing spaces from the
-        table style name displayed in the Word UI.
+        Read/write. A |_TableStyle| object representing the style applied to
+        this table. The default table style for the document (often `Normal
+        Table`) is returned if the table has no directly-applied style.
+        Assigning |None| to this property removes any directly-applied table
+        style causing it to inherit the default table style of the document.
+        Note that the style name of a table style differs slightly from that
+        displayed in the user interface; a hyphen, if it appears, must be
+        removed. For example, `Light Shading - Accent 1` becomes `Light
+        Shading Accent 1`.
         """
-        return self._tblPr.style
+        style_id = self._tbl.tblStyle_val
+        return self.part.get_style(style_id, WD_STYLE_TYPE.TABLE)
 
     @style.setter
-    def style(self, value):
-        self._tblPr.style = value
+    def style(self, style_or_name):
+        style_id = self.part.get_style_id(
+            style_or_name, WD_STYLE_TYPE.TABLE
+        )
+        self._tbl.tblStyle_val = style_id
 
     @property
     def table(self):
@@ -128,6 +144,19 @@ class Table(Parented):
         calls from an arbitrary child through its ancestors.
         """
         return self
+
+    @property
+    def table_direction(self):
+        """
+        A member of :ref:`WdTableDirection` indicating the direction in which
+        the table cells are ordered, e.g. `WD_TABLE_DIRECTION.LTR`. |None|
+        indicates the value is inherited from the style hierarchy.
+        """
+        return self._element.bidiVisual_val
+
+    @table_direction.setter
+    def table_direction(self, value):
+        self._element.bidiVisual_val = value
 
     @property
     def _cells(self):
@@ -189,9 +218,10 @@ class _Cell(BlockItemContainer):
         added after the table because Word requires a paragraph element as
         the last element in every cell.
         """
-        new_table = super(_Cell, self).add_table(rows, cols)
+        width = self.width if self.width is not None else Inches(1)
+        table = super(_Cell, self).add_table(rows, cols, width)
         self.add_paragraph()
-        return new_table
+        return table
 
     def merge(self, other_cell):
         """
@@ -370,8 +400,8 @@ class _Row(Parented):
 
 class _Rows(Parented):
     """
-    Sequence of |_Row| instances corresponding to the rows in a table.
-    Supports ``len()``, iteration and indexed access.
+    Sequence of |_Row| objects corresponding to the rows in a table.
+    Supports ``len()``, iteration, indexed access, and slicing.
     """
     def __init__(self, tbl, parent):
         super(_Rows, self).__init__(parent)
@@ -381,12 +411,7 @@ class _Rows(Parented):
         """
         Provide indexed access, (e.g. 'rows[0]')
         """
-        try:
-            tr = self._tbl.tr_lst[idx]
-        except IndexError:
-            msg = "row index [%d] out of range" % idx
-            raise IndexError(msg)
-        return _Row(tr, self)
+        return list(self)[idx]
 
     def __iter__(self):
         return (_Row(tr, self) for tr in self._tbl.tr_lst)

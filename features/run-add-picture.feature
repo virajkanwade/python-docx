@@ -3,6 +3,7 @@ Feature: Add picture to a run
   As a developer using python-docx
   I need a way to add a picture to a run
 
+
   Scenario: Add a picture to a body paragraph run
     Given a run
      When I add a picture to the run

@@ -11,8 +11,8 @@ import hashlib
 import os
 
 from ..compat import BytesIO, is_string
-from ..shared import lazyproperty
 from .exceptions import UnrecognizedImageError
+from ..shared import Emu, Inches, lazyproperty
 
 
 class Image(object):
@@ -116,6 +116,49 @@ class Image(object):
         when not present in the file, as is often the case.
         """
         return self._image_header.vert_dpi
+
+    @property
+    def width(self):
+        """
+        A |Length| value representing the native width of the image,
+        calculated from the values of `px_width` and `horz_dpi`.
+        """
+        return Inches(self.px_width / self.horz_dpi)
+
+    @property
+    def height(self):
+        """
+        A |Length| value representing the native height of the image,
+        calculated from the values of `px_height` and `vert_dpi`.
+        """
+        return Inches(self.px_height / self.vert_dpi)
+
+    def scaled_dimensions(self, width=None, height=None):
+        """
+        Return a (cx, cy) 2-tuple representing the native dimensions of this
+        image scaled by applying the following rules to *width* and *height*.
+        If both *width* and *height* are specified, the return value is
+        (*width*, *height*); no scaling is performed. If only one is
+        specified, it is used to compute a scaling factor that is then
+        applied to the unspecified dimension, preserving the aspect ratio of
+        the image. If both *width* and *height* are |None|, the native
+        dimensions are returned. The native dimensions are calculated using
+        the dots-per-inch (dpi) value embedded in the image, defaulting to 72
+        dpi if no value is specified, as is often the case. The returned
+        values are both |Length| objects.
+        """
+        if width is None and height is None:
+            return self.width, self.height
+
+        if width is None:
+            scaling_factor = float(height) / float(self.height)
+            width = round(self.width * scaling_factor)
+
+        if height is None:
+            scaling_factor = float(width) / float(self.width)
+            height = round(self.height * scaling_factor)
+
+        return Emu(width), Emu(height)
 
     @lazyproperty
     def sha1(self):

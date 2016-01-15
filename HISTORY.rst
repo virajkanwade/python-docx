@@ -3,6 +3,91 @@
 Release History
 ---------------
 
+0.8.5 (2015-02-21)
+++++++++++++++++++
+
+- Fix #149: KeyError on Document.add_table()
+- Fix #78: feature: add_table() sets cell widths
+- Add #106: feature: Table.direction (i.e. right-to-left)
+- Add #102: feature: add CT_Row.trPr
+
+
+0.8.4 (2015-02-20)
+++++++++++++++++++
+
+- Fix #151: tests won't run on PyPI distribution
+- Fix #124: default to inches on no TIFF resolution unit
+
+
+0.8.3 (2015-02-19)
+++++++++++++++++++
+
+- Add #121, #135, #139: feature: Font.color
+
+
+0.8.2 (2015-02-16)
+++++++++++++++++++
+
+- Fix #94: picture prints at wrong size when scaled
+- Extract `docx.document.Document` object from `DocumentPart`
+
+  Refactor `docx.Document` from an object into a factory function for new
+  `docx.document.Document object`. Extract methods from prior `docx.Document`
+  and `docx.parts.document.DocumentPart` to form the new API class and retire
+  `docx.Document` class.
+
+- Migrate `Document.numbering_part` to `DocumentPart.numbering_part`. The
+  `numbering_part` property is not part of the published API and is an
+  interim internal feature to be replaced in a future release, perhaps with
+  something like `Document.numbering_definitions`. In the meantime, it can
+  now be accessed using ``Document.part.numbering_part``.
+
+
+0.8.1 (2015-02-10)
+++++++++++++++++++
+
+- Fix #140: Warning triggered on Document.add_heading/table()
+
+
+0.8.0 (2015-02-08)
+++++++++++++++++++
+
+- Add styles. Provides general capability to access and manipulate paragraph,
+  character, and table styles.
+
+- Add ParagraphFormat object, accessible on Paragraph.paragraph_format, and
+  providing the following paragraph formatting properties:
+
+  + paragraph alignment (justfification)
+  + space before and after paragraph
+  + line spacing
+  + indentation
+  + keep together, keep with next, page break before, and widow control
+
+- Add Font object, accessible on Run.font, providing character-level
+  formatting including:
+
+  + typeface (e.g. 'Arial')
+  + point size
+  + underline
+  + italic
+  + bold
+  + superscript and subscript
+
+The following issues were retired:
+
+- Add feature #56: superscript/subscript
+- Add feature #67: lookup style by UI name
+- Add feature #98: Paragraph indentation
+- Add feature #120: Document.styles
+
+**Backward incompatibilities**
+
+Paragraph.style now returns a Style object. Previously it returned the style
+name as a string. The name can now be retrieved using the Style.name
+property, for example, `paragraph.style.name`.
+
+
 0.7.6 (2014-12-14)
 ++++++++++++++++++
 

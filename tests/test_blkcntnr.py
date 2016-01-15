@@ -9,25 +9,34 @@ from __future__ import absolute_import, print_function, unicode_literals
 import pytest
 
 from docx.blkcntnr import BlockItemContainer
+from docx.shared import Inches
 from docx.table import Table
-from docx.text import Paragraph
+from docx.text.paragraph import Paragraph
 
 from .unitutil.cxml import element, xml
+from .unitutil.file import snippet_seq
+from .unitutil.mock import call, instance_mock, method_mock
 
 
 class DescribeBlockItemContainer(object):
 
     def it_can_add_a_paragraph(self, add_paragraph_fixture):
-        blkcntnr, text, style, expected_xml = add_paragraph_fixture
-        paragraph = blkcntnr.add_paragraph(text, style)
-        assert blkcntnr._element.xml == expected_xml
-        assert isinstance(paragraph, Paragraph)
+        blkcntnr, text, style, paragraph_, add_run_calls = (
+            add_paragraph_fixture
+        )
+        new_paragraph = blkcntnr.add_paragraph(text, style)
+
+        blkcntnr._add_paragraph.assert_called_once_with()
+        assert new_paragraph.add_run.call_args_list == add_run_calls
+        assert new_paragraph.style == style
+        assert new_paragraph is paragraph_
 
     def it_can_add_a_table(self, add_table_fixture):
-        blkcntnr, rows, cols, expected_xml = add_table_fixture
-        table = blkcntnr.add_table(rows, cols)
-        assert blkcntnr._element.xml == expected_xml
+        blkcntnr, rows, cols, width, expected_xml = add_table_fixture
+        table = blkcntnr.add_table(rows, cols, width)
         assert isinstance(table, Table)
+        assert table._element.xml == expected_xml
+        assert table._parent is blkcntnr
 
     def it_provides_access_to_the_paragraphs_it_contains(
             self, paragraphs_fixture):
@@ -54,39 +63,43 @@ class DescribeBlockItemContainer(object):
             count += 1
         assert count == expected_count
 
+    def it_adds_a_paragraph_to_help(self, _add_paragraph_fixture):
+        blkcntnr, expected_xml = _add_paragraph_fixture
+        new_paragraph = blkcntnr._add_paragraph()
+        assert isinstance(new_paragraph, Paragraph)
+        assert new_paragraph._parent == blkcntnr
+        assert blkcntnr._element.xml == expected_xml
+
     # fixtures -------------------------------------------------------
 
     @pytest.fixture(params=[
-        ('w:body', '', None,
-         'w:body/w:p'),
-        ('w:body', 'foobar', None,
-         'w:body/w:p/w:r/w:t"foobar"'),
-        ('w:body', '', 'Heading1',
-         'w:body/w:p/w:pPr/w:pStyle{w:val=Heading1}'),
-        ('w:body', 'barfoo', 'BodyText',
-         'w:body/w:p/(w:pPr/w:pStyle{w:val=BodyText},w:r/w:t"barfoo")'),
+        ('',    None),
+        ('Foo', None),
+        ('',    'Bar'),
+        ('Foo', 'Bar'),
     ])
-    def add_paragraph_fixture(self, request):
-        blkcntnr_cxml, text, style, after_cxml = request.param
-        blkcntnr = BlockItemContainer(element(blkcntnr_cxml), None)
-        expected_xml = xml(after_cxml)
-        return blkcntnr, text, style, expected_xml
+    def add_paragraph_fixture(self, request, _add_paragraph_, paragraph_,
+                              add_run_):
+        blkcntnr = BlockItemContainer(None, None)
+        text, style = request.param
+        _add_paragraph_.return_value = paragraph_
+        add_run_calls = [call(text)] if text else []
+        paragraph_.style = None
+        return blkcntnr, text, style, paragraph_, add_run_calls
 
-    @pytest.fixture(params=[
-        ('w:body', 0, 0, 'w:body/w:tbl/(w:tblPr/w:tblW{w:type=auto,w:w=0},w:'
-         'tblGrid)'),
-        ('w:body', 1, 0, 'w:body/w:tbl/(w:tblPr/w:tblW{w:type=auto,w:w=0},w:'
-         'tblGrid,w:tr)'),
-        ('w:body', 0, 1, 'w:body/w:tbl/(w:tblPr/w:tblW{w:type=auto,w:w=0},w:'
-         'tblGrid/w:gridCol)'),
-        ('w:body', 1, 1, 'w:body/w:tbl/(w:tblPr/w:tblW{w:type=auto,w:w=0},w:'
-         'tblGrid/w:gridCol,w:tr/w:tc/w:p)'),
-    ])
-    def add_table_fixture(self, request):
-        blkcntnr_cxml, rows, cols, after_cxml = request.param
+    @pytest.fixture
+    def _add_paragraph_fixture(self, request):
+        blkcntnr_cxml, after_cxml = 'w:body', 'w:body/w:p'
         blkcntnr = BlockItemContainer(element(blkcntnr_cxml), None)
         expected_xml = xml(after_cxml)
-        return blkcntnr, rows, cols, expected_xml
+        return blkcntnr, expected_xml
+
+    @pytest.fixture
+    def add_table_fixture(self):
+        blkcntnr = BlockItemContainer(element('w:body'), None)
+        rows, cols, width = 2, 2, Inches(2)
+        expected_xml = snippet_seq('new-tbl')[0]
+        return blkcntnr, rows, cols, width, expected_xml
 
     @pytest.fixture(params=[
         ('w:body',                 0),
@@ -111,3 +124,17 @@ class DescribeBlockItemContainer(object):
         blkcntnr_cxml, expected_count = request.param
         blkcntnr = BlockItemContainer(element(blkcntnr_cxml), None)
         return blkcntnr, expected_count
+
+    # fixture components ---------------------------------------------
+
+    @pytest.fixture
+    def _add_paragraph_(self, request):
+        return method_mock(request, BlockItemContainer, '_add_paragraph')
+
+    @pytest.fixture
+    def add_run_(self, request):
+        return method_mock(request, Paragraph, 'add_run')
+
+    @pytest.fixture
+    def paragraph_(self, request):
+        return instance_mock(request, Paragraph)

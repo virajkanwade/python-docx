@@ -8,8 +8,13 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals
 )
 
+import os
+
+from ..opc.constants import CONTENT_TYPE as CT
+from ..opc.packuri import PackURI
 from ..opc.part import XmlPart
-from ..shared import lazyproperty
+from ..oxml import parse_xml
+from ..styles.styles import Styles
 
 
 class StylesPart(XmlPart):
@@ -18,30 +23,33 @@ class StylesPart(XmlPart):
     or glossary.
     """
     @classmethod
-    def new(cls):
+    def default(cls, package):
         """
-        Return newly created empty styles part, containing only the root
-        ``<w:styles>`` element.
+        Return a newly created styles part, containing a default set of
+        elements.
         """
-        raise NotImplementedError
+        partname = PackURI('/word/styles.xml')
+        content_type = CT.WML_STYLES
+        element = parse_xml(cls._default_styles_xml())
+        return cls(partname, content_type, element, package)
 
-    @lazyproperty
+    @property
     def styles(self):
         """
         The |_Styles| instance containing the styles (<w:style> element
         proxies) for this styles part.
         """
-        return _Styles(self._element)
+        return Styles(self.element)
 
-
-class _Styles(object):
-    """
-    Collection of |_Style| instances corresponding to the ``<w:style>``
-    elements in a styles part.
-    """
-    def __init__(self, styles_elm):
-        super(_Styles, self).__init__()
-        self._styles_elm = styles_elm
-
-    def __len__(self):
-        return len(self._styles_elm.style_lst)
+    @classmethod
+    def _default_styles_xml(cls):
+        """
+        Return a bytestream containing XML for a default styles part.
+        """
+        path = os.path.join(
+            os.path.split(__file__)[0], '..', 'templates',
+            'default-styles.xml'
+        )
+        with open(path, 'rb') as f:
+            xml_bytes = f.read()
+        return xml_bytes

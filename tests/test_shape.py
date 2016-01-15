@@ -10,19 +10,72 @@ import pytest
 
 from docx.enum.shape import WD_INLINE_SHAPE
 from docx.oxml.ns import nsmap
-from docx.parts.image import ImagePart
-from docx.shape import InlineShape
+from docx.shape import InlineShape, InlineShapes
 from docx.shared import Length
 
 from .oxml.unitdata.dml import (
-    a_blip, a_blipFill, a_cNvGraphicFramePr, a_cNvPr, a_cNvPicPr, a_docPr,
-    a_fillRect, a_graphic, a_graphicData, a_graphicFrameLocks, a_pic,
-    a_prstGeom, a_stretch, an_ext, an_extent, an_inline, an_nvPicPr, an_off,
-    an_spPr, an_xfrm
+    a_blip, a_blipFill, a_graphic, a_graphicData, a_pic, an_inline,
 )
-from .oxml.unitdata.text import an_r
 from .unitutil.cxml import element, xml
-from .unitutil.mock import instance_mock
+from .unitutil.mock import loose_mock
+
+
+class DescribeInlineShapes(object):
+
+    def it_knows_how_many_inline_shapes_it_contains(
+            self, inline_shapes_fixture):
+        inline_shapes, expected_count = inline_shapes_fixture
+        assert len(inline_shapes) == expected_count
+
+    def it_can_iterate_over_its_InlineShape_instances(
+            self, inline_shapes_fixture):
+        inline_shapes, inline_shape_count = inline_shapes_fixture
+        actual_count = 0
+        for inline_shape in inline_shapes:
+            assert isinstance(inline_shape, InlineShape)
+            actual_count += 1
+        assert actual_count == inline_shape_count
+
+    def it_provides_indexed_access_to_inline_shapes(
+            self, inline_shapes_fixture):
+        inline_shapes, inline_shape_count = inline_shapes_fixture
+        for idx in range(-inline_shape_count, inline_shape_count):
+            inline_shape = inline_shapes[idx]
+            assert isinstance(inline_shape, InlineShape)
+
+    def it_raises_on_indexed_access_out_of_range(
+            self, inline_shapes_fixture):
+        inline_shapes, inline_shape_count = inline_shapes_fixture
+        with pytest.raises(IndexError):
+            too_low = -1 - inline_shape_count
+            inline_shapes[too_low]
+        with pytest.raises(IndexError):
+            too_high = inline_shape_count
+            inline_shapes[too_high]
+
+    def it_knows_the_part_it_belongs_to(self, inline_shapes_with_parent_):
+        inline_shapes, parent_ = inline_shapes_with_parent_
+        part = inline_shapes.part
+        assert part is parent_.part
+
+    # fixtures -------------------------------------------------------
+
+    @pytest.fixture
+    def inline_shapes_fixture(self):
+        body = element(
+            'w:body/w:p/(w:r/w:drawing/wp:inline, w:r/w:drawing/wp:inline)'
+        )
+        inline_shapes = InlineShapes(body, None)
+        expected_count = 2
+        return inline_shapes, expected_count
+
+    # fixture components ---------------------------------------------
+
+    @pytest.fixture
+    def inline_shapes_with_parent_(self, request):
+        parent_ = loose_mock(request, name='parent_')
+        inline_shapes = InlineShapes(None, parent_)
+        return inline_shapes, parent_
 
 
 class DescribeInlineShape(object):
@@ -30,15 +83,6 @@ class DescribeInlineShape(object):
     def it_knows_what_type_of_shape_it_is(self, shape_type_fixture):
         inline_shape, inline_shape_type = shape_type_fixture
         assert inline_shape.type == inline_shape_type
-
-    def it_can_contruct_a_new_inline_picture_shape(
-            self, new_picture_fixture):
-        inline_shape, r, image_part_, rId, shape_id, expected_inline_xml = (
-            new_picture_fixture
-        )
-        picture = inline_shape.new_picture(r, image_part_, rId, shape_id)
-        assert picture._inline.xml == expected_inline_xml
-        assert r[0][0] is picture._inline
 
     def it_knows_its_display_dimensions(self, dimensions_get_fixture):
         inline_shape, cx, cy = dimensions_get_fixture
@@ -68,35 +112,15 @@ class DescribeInlineShape(object):
     @pytest.fixture
     def dimensions_set_fixture(self):
         inline_cxml, new_cx, new_cy, expected_cxml = (
-            'wp:inline/wp:extent{cx=333, cy=666}', 444, 888,
-            'wp:inline/wp:extent{cx=444, cy=888}'
+            'wp:inline/(wp:extent{cx=333,cy=666},a:graphic/a:graphicData/'
+            'pic:pic/pic:spPr/a:xfrm/a:ext{cx=333,cy=666})',
+            444, 888,
+            'wp:inline/(wp:extent{cx=444,cy=888},a:graphic/a:graphicData/'
+            'pic:pic/pic:spPr/a:xfrm/a:ext{cx=444,cy=888})'
         )
         inline_shape = InlineShape(element(inline_cxml))
         expected_xml = xml(expected_cxml)
         return inline_shape, new_cx, new_cy, expected_xml
-
-    @pytest.fixture
-    def new_picture_fixture(self, request, image_part_, image_params):
-        filename, rId, cx, cy = image_params
-        inline_shape = InlineShape(None)
-        r = an_r().with_nsdecls().element
-        shape_id = 7
-        name = 'Picture %d' % shape_id
-        uri = nsmap['pic']
-        expected_inline = (
-            an_inline().with_nsdecls('wp', 'a', 'pic', 'r', 'w').with_child(
-                an_extent().with_cx(cx).with_cy(cy)).with_child(
-                a_docPr().with_id(shape_id).with_name(name)).with_child(
-                a_cNvGraphicFramePr().with_child(
-                    a_graphicFrameLocks().with_noChangeAspect(1))).with_child(
-                a_graphic().with_child(
-                    a_graphicData().with_uri(uri).with_child(
-                        self._pic_bldr(filename, rId, cx, cy))))
-        ).element
-        expected_inline_xml = expected_inline.xml
-        return (
-            inline_shape, r, image_part_, rId, shape_id, expected_inline_xml
-        )
 
     @pytest.fixture(params=[
         'embed pic', 'link pic', 'link+embed pic', 'chart', 'smart art',
@@ -131,22 +155,6 @@ class DescribeInlineShape(object):
 
     # fixture components ---------------------------------------------
 
-    @pytest.fixture
-    def image_params(self):
-        filename = 'foobar.garf'
-        rId = 'rId42'
-        cx, cy = 914422, 223344
-        return filename, rId, cx, cy
-
-    @pytest.fixture
-    def image_part_(self, request, image_params):
-        filename, rId, cx, cy = image_params
-        image_part_ = instance_mock(request, ImagePart)
-        image_part_.default_cx = cx
-        image_part_.default_cy = cy
-        image_part_.filename = filename
-        return image_part_
-
     def _inline_with_picture(self, embed=False, link=False):
         picture_ns = nsmap['pic']
 
@@ -173,20 +181,3 @@ class DescribeInlineShape(object):
                     a_graphicData().with_uri(uri)))
         ).element
         return inline
-
-    def _pic_bldr(self, name, rId, cx, cy):
-        return (
-            a_pic().with_child(
-                an_nvPicPr().with_child(
-                    a_cNvPr().with_id(0).with_name(name)).with_child(
-                    a_cNvPicPr())).with_child(
-                a_blipFill().with_child(
-                    a_blip().with_embed(rId)).with_child(
-                    a_stretch().with_child(
-                        a_fillRect()))).with_child(
-                an_spPr().with_child(
-                    an_xfrm().with_child(
-                        an_off().with_x(0).with_y(0)).with_child(
-                        an_ext().with_cx(cx).with_cy(cy))).with_child(
-                    a_prstGeom().with_prst('rect')))
-        )

@@ -8,8 +8,9 @@ ones like structured document tags.
 
 from __future__ import absolute_import, print_function
 
+from .oxml.table import CT_Tbl
 from .shared import Parented
-from .text import Paragraph
+from .text.paragraph import Paragraph
 
 
 class BlockItemContainer(Parented):
@@ -30,27 +31,23 @@ class BlockItemContainer(Parented):
         paragraph style *style*. If *style* is |None|, no paragraph style is
         applied, which has the same effect as applying the 'Normal' style.
         """
-        p = self._element.add_p()
-        paragraph = Paragraph(p, self)
+        paragraph = self._add_paragraph()
         if text:
             paragraph.add_run(text)
         if style is not None:
             paragraph.style = style
         return paragraph
 
-    def add_table(self, rows, cols):
+    def add_table(self, rows, cols, width):
         """
-        Return a newly added table having *rows* rows and *cols* cols,
-        appended to the content in this container.
+        Return a table of *width* having *rows* rows and *cols* columns,
+        newly appended to the content in this container. *width* is evenly
+        distributed between the table columns.
         """
         from .table import Table
-        tbl = self._element.add_tbl()
-        table = Table(tbl, self)
-        for i in range(cols):
-            table.add_column()
-        for i in range(rows):
-            table.add_row()
-        return table
+        tbl = CT_Tbl.new_tbl(rows, cols, width)
+        self._element._insert_tbl(tbl)
+        return Table(tbl, self)
 
     @property
     def paragraphs(self):
@@ -68,3 +65,10 @@ class BlockItemContainer(Parented):
         """
         from .table import Table
         return [Table(tbl, self) for tbl in self._element.tbl_lst]
+
+    def _add_paragraph(self):
+        """
+        Return a paragraph newly added to the end of the content in this
+        container.
+        """
+        return Paragraph(self._element.add_p(), self)

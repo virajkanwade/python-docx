@@ -8,62 +8,71 @@ from __future__ import (
     absolute_import, division, print_function, unicode_literals
 )
 
-from collections import Sequence
-
-from ..blkcntnr import BlockItemContainer
-from ..enum.section import WD_SECTION
+from ..document import Document
+from .numbering import NumberingPart
 from ..opc.constants import RELATIONSHIP_TYPE as RT
 from ..opc.part import XmlPart
-from ..section import Section
-from ..shape import InlineShape
-from ..shared import lazyproperty, Parented
+from ..oxml.shape import CT_Inline
+from ..shape import InlineShapes
+from ..shared import lazyproperty
+from .styles import StylesPart
 
 
 class DocumentPart(XmlPart):
     """
     Main document part of a WordprocessingML (WML) package, aka a .docx file.
+    Acts as broker to other parts such as image, core properties, and style
+    parts. It also acts as a convenient delegate when a mid-document object
+    needs a service involving a remote ancestor. The `Parented.part` property
+    inherited by many content objects provides access to this part object for
+    that purpose.
     """
-    def add_paragraph(self, text='', style=None):
+    @property
+    def core_properties(self):
         """
-        Return a paragraph newly added to the end of body content.
+        A |CoreProperties| object providing read/write access to the core
+        properties of this document.
         """
-        return self.body.add_paragraph(text, style)
+        return self.package.core_properties
 
-    def add_section(self, start_type=WD_SECTION.NEW_PAGE):
+    @property
+    def document(self):
         """
-        Return a |Section| object representing a new section added at the end
-        of the document.
+        A |Document| object providing access to the content of this document.
         """
-        new_sectPr = self._element.body.add_section_break()
-        new_sectPr.start_type = start_type
-        return Section(new_sectPr)
+        return Document(self._element, self)
 
-    def add_table(self, rows, cols):
+    def get_or_add_image(self, image_descriptor):
         """
-        Return a table having *rows* rows and *cols* columns, newly appended
-        to the main document story.
+        Return an (rId, image) 2-tuple for the image identified by
+        *image_descriptor*. *image* is an |Image| instance providing access
+        to the properties of the image, such as dimensions and image type.
+        *rId* is the key for the relationship between this document part and
+        the image part, reused if already present, newly created if not.
         """
-        return self.body.add_table(rows, cols)
-
-    @lazyproperty
-    def body(self):
-        """
-        The |_Body| instance containing the content for this document.
-        """
-        return _Body(self._element.body, self)
-
-    def get_or_add_image_part(self, image_descriptor):
-        """
-        Return an ``(image_part, rId)`` 2-tuple for the image identified by
-        *image_descriptor*. *image_part* is an |Image| instance corresponding
-        to the image, newly created if no matching image part is found. *rId*
-        is the key for the relationship between this document part and the
-        image part, reused if already present, newly created if not.
-        """
-        image_parts = self._package.image_parts
-        image_part = image_parts.get_or_add_image_part(image_descriptor)
+        image_part = self._package.image_parts.get_or_add_image_part(
+            image_descriptor
+        )
         rId = self.relate_to(image_part, RT.IMAGE)
-        return (image_part, rId)
+        return rId, image_part.image
+
+    def get_style(self, style_id, style_type):
+        """
+        Return the style in this document matching *style_id*. Returns the
+        default style for *style_type* if *style_id* is |None| or does not
+        match a defined style of *style_type*.
+        """
+        return self.styles.get_by_id(style_id, style_type)
+
+    def get_style_id(self, style_or_name, style_type):
+        """
+        Return the style_id (|str|) of the style of *style_type* matching
+        *style_or_name*. Returns |None| if the style resolves to the default
+        style for *style_type* or if *style_or_name* is itself |None|. Raises
+        if *style_or_name* is a style of the wrong type or names a style not
+        present in the document.
+        """
+        return self.styles.get_style_id(style_or_name, style_type)
 
     @lazyproperty
     def inline_shapes(self):
@@ -72,6 +81,17 @@ class DocumentPart(XmlPart):
         document.
         """
         return InlineShapes(self._element.body, self)
+
+    def new_pic_inline(self, image_descriptor, width, height):
+        """
+        Return a newly-created `w:inline` element containing the image
+        specified by *image_descriptor* and scaled based on the values of
+        *width* and *height*.
+        """
+        rId, image = self.get_or_add_image(image_descriptor)
+        cx, cy = image.scaled_dimensions(width, height)
+        shape_id, filename = self.next_id, image.filename
+        return CT_Inline.new_pic_inline(shape_id, rId, filename, cx, cy)
 
     @property
     def next_id(self):
@@ -86,116 +106,44 @@ class DocumentPart(XmlPart):
             if n not in used_ids:
                 return n
 
-    @property
-    def paragraphs(self):
-        """
-        A list of |Paragraph| instances corresponding to the paragraphs in
-        the document, in document order. Note that paragraphs within revision
-        marks such as inserted or deleted do not appear in this list.
-        """
-        return self.body.paragraphs
-
     @lazyproperty
-    def sections(self):
+    def numbering_part(self):
         """
-        The |Sections| instance organizing the sections in this document.
-        """
-        return Sections(self._element)
-
-    @property
-    def tables(self):
-        """
-        A list of |Table| instances corresponding to the tables in the
-        document, in document order. Note that tables within revision marks
-        such as ``<w:ins>`` or ``<w:del>`` do not appear in this list.
-        """
-        return self.body.tables
-
-
-class _Body(BlockItemContainer):
-    """
-    Proxy for ``<w:body>`` element in this document, having primarily a
-    container role.
-    """
-    def __init__(self, body_elm, parent):
-        super(_Body, self).__init__(body_elm, parent)
-        self._body = body_elm
-
-    def clear_content(self):
-        """
-        Return this |_Body| instance after clearing it of all content.
-        Section properties for the main document story, if present, are
-        preserved.
-        """
-        self._body.clear_content()
-        return self
-
-
-class InlineShapes(Parented):
-    """
-    Sequence of |InlineShape| instances, supporting len(), iteration, and
-    indexed access.
-    """
-    def __init__(self, body_elm, parent):
-        super(InlineShapes, self).__init__(parent)
-        self._body = body_elm
-
-    def __getitem__(self, idx):
-        """
-        Provide indexed access, e.g. 'inline_shapes[idx]'
+        A |NumberingPart| object providing access to the numbering
+        definitions for this document. Creates an empty numbering part if one
+        is not present.
         """
         try:
-            inline = self._inline_lst[idx]
-        except IndexError:
-            msg = "inline shape index [%d] out of range" % idx
-            raise IndexError(msg)
-        return InlineShape(inline)
+            return self.part_related_by(RT.NUMBERING)
+        except KeyError:
+            numbering_part = NumberingPart.new()
+            self.relate_to(numbering_part, RT.NUMBERING)
+            return numbering_part
 
-    def __iter__(self):
-        return (InlineShape(inline) for inline in self._inline_lst)
-
-    def __len__(self):
-        return len(self._inline_lst)
-
-    def add_picture(self, image_descriptor, run):
+    def save(self, path_or_stream):
         """
-        Return an |InlineShape| instance containing the picture identified by
-        *image_descriptor* and added to the end of *run*. The picture shape
-        has the native size of the image. *image_descriptor* can be a path (a
-        string) or a file-like object containing a binary image.
+        Save this document to *path_or_stream*, which can be either a path to
+        a filesystem location (a string) or a file-like object.
         """
-        image_part, rId = self.part.get_or_add_image_part(image_descriptor)
-        shape_id = self.part.next_id
-        r = run._r
-        picture = InlineShape.new_picture(r, image_part, rId, shape_id)
-        return picture
+        self.package.save(path_or_stream)
 
     @property
-    def _inline_lst(self):
-        body = self._body
-        xpath = '//w:p/w:r/w:drawing/wp:inline'
-        return body.xpath(xpath)
+    def styles(self):
+        """
+        A |Styles| object providing access to the styles in the styles part
+        of this document.
+        """
+        return self._styles_part.styles
 
-
-class Sections(Sequence):
-    """
-    Sequence of |Section| objects corresponding to the sections in the
-    document. Supports ``len()``, iteration, and indexed access.
-    """
-    def __init__(self, document_elm):
-        super(Sections, self).__init__()
-        self._document_elm = document_elm
-
-    def __getitem__(self, key):
-        if isinstance(key, slice):
-            sectPr_lst = self._document_elm.sectPr_lst[key]
-            return [Section(sectPr) for sectPr in sectPr_lst]
-        sectPr = self._document_elm.sectPr_lst[key]
-        return Section(sectPr)
-
-    def __iter__(self):
-        for sectPr in self._document_elm.sectPr_lst:
-            yield Section(sectPr)
-
-    def __len__(self):
-        return len(self._document_elm.sectPr_lst)
+    @property
+    def _styles_part(self):
+        """
+        Instance of |StylesPart| for this document. Creates an empty styles
+        part if one is not present.
+        """
+        try:
+            return self.part_related_by(RT.STYLES)
+        except KeyError:
+            styles_part = StylesPart.default(self.package)
+            self.relate_to(styles_part, RT.STYLES)
+            return styles_part

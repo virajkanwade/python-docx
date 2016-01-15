@@ -4,18 +4,30 @@
 Text-related objects
 ====================
 
-.. currentmodule:: docx.text
-
 
 |Paragraph| objects
 -------------------
 
-.. autoclass:: Paragraph
+.. autoclass:: docx.text.paragraph.Paragraph()
+   :members:
+
+
+|ParagraphFormat| objects
+-------------------------
+
+.. autoclass:: docx.text.parfmt.ParagraphFormat()
    :members:
 
 
 |Run| objects
 -------------
 
-.. autoclass:: Run
+.. autoclass:: docx.text.run.Run()
+   :members:
+
+
+|Font| objects
+--------------
+
+.. autoclass:: docx.text.run.Font()
    :members:

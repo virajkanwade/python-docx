@@ -12,22 +12,16 @@ from behave import given, then, when
 
 from docx import Document
 from docx.enum.shape import WD_INLINE_SHAPE
-from docx.parts.document import InlineShape, InlineShapes
+from docx.shape import InlineShape
 from docx.shared import Inches
 
-from helpers import test_docx, test_file
+from helpers import test_docx
 
 
 # given ===================================================
 
-@given('a document containing five inline shapes')
-def given_a_document_containing_two_inline_shapes(context):
-    docx_path = test_docx('shp-inline-shape-access')
-    context.document = Document(docx_path)
-
-
 @given('an inline shape collection containing five shapes')
-def given_inline_shape_collection_containing_two_shapes(context):
+def given_an_inline_shape_collection_containing_five_shapes(context):
     docx_path = test_docx('shp-inline-shape-access')
     document = Document(docx_path)
     context.inline_shapes = document.inline_shapes
@@ -55,23 +49,6 @@ def given_inline_shape_known_to_be_shape_of_type(context, shp_of_type):
 
 # when =====================================================
 
-@when('I add an inline picture from a file-like object')
-def when_add_inline_picture_from_file_like_object(context):
-    document = context.document
-    run = document.add_paragraph().add_run()
-    with open(test_file('monty-truth.png'), 'rb') as f:
-        context.inline_shape = document.inline_shapes.add_picture(f, run)
-
-
-@when('I add an inline picture to the document')
-def when_add_inline_picture_to_document(context):
-    document = context.document
-    run = document.add_paragraph().add_run()
-    context.inline_shape = (document.inline_shapes.add_picture(
-        test_file('monty-truth.png'), run
-    ))
-
-
 @when('I change the dimensions of the inline shape')
 def when_change_dimensions_of_inline_shape(context):
     inline_shape = context.inline_shape
@@ -87,13 +64,6 @@ def then_can_access_each_inline_shape_by_index(context):
     for idx in range(2):
         inline_shape = inline_shapes[idx]
         assert isinstance(inline_shape, InlineShape)
-
-
-@then('I can access the inline shape collection of the document')
-def then_can_access_inline_shape_collection_of_document(context):
-    document = context.document
-    inline_shapes = document.inline_shapes
-    assert isinstance(inline_shapes, InlineShapes)
 
 
 @then('I can iterate over the inline shape collection')
@@ -141,7 +111,7 @@ def then_the_document_contains_the_inline_picture(context):
     picture_shape = document.inline_shapes[0]
     blip = picture_shape._inline.graphic.graphicData.pic.blipFill.blip
     rId = blip.embed
-    image_part = document._document_part.related_parts[rId]
+    image_part = document.part.related_parts[rId]
     image_sha1 = hashlib.sha1(image_part.blob).hexdigest()
     expected_sha1 = '79769f1e202add2e963158b532e36c2c0f76a70c'
     assert image_sha1 == expected_sha1, (
@@ -152,7 +122,7 @@ def then_the_document_contains_the_inline_picture(context):
 
 @then('the length of the inline shape collection is 5')
 def then_len_of_inline_shape_collection_is_5(context):
-    inline_shapes = context.document.inline_shapes
+    inline_shapes = context.inline_shapes
     shape_count = len(inline_shapes)
     assert shape_count == 5, 'got %s' % shape_count
 
@@ -164,25 +134,21 @@ def then_picture_has_native_width_and_height(context):
     assert picture.height == 2717800, 'got %d' % picture.height
 
 
-@then('the picture height is 2.14 inches')
-def then_picture_height_is_value_2(context):
+@then('picture.height is {inches} inches')
+def then_picture_height_is_value(context, inches):
+    expected_value = {
+        '2.14': 1956816,
+        '2.5':  2286000,
+    }[inches]
     picture = context.picture
-    assert picture.height == 1956816, 'got %d' % picture.height
+    assert picture.height == expected_value, 'got %d' % picture.height
 
 
-@then('the picture height is 2.5 inches')
-def then_picture_height_is_value(context):
+@then('picture.width is {inches} inches')
+def then_picture_width_is_value(context, inches):
+    expected_value = {
+        '1.05':  961402,
+        '1.75': 1600200,
+    }[inches]
     picture = context.picture
-    assert picture.height == 2286000, 'got %d' % picture.height
-
-
-@then('the picture width is 1.05 inches')
-def then_picture_width_is_value_2(context):
-    picture = context.picture
-    assert picture.width == 961402, 'got %d' % picture.width
-
-
-@then('the picture width is 1.75 inches')
-def then_picture_width_is_value(context):
-    picture = context.picture
-    assert picture.width == 1600200, 'got %d' % picture.width
+    assert picture.width == expected_value, 'got %d' % picture.width

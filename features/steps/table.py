@@ -11,7 +11,7 @@ from __future__ import (
 from behave import given, then, when
 
 from docx import Document
-from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.table import WD_TABLE_ALIGNMENT, WD_TABLE_DIRECTION
 from docx.shared import Inches
 from docx.table import _Column, _Columns, _Row, _Rows
 
@@ -89,13 +89,6 @@ def given_a_table_having_alignment_alignment(context, alignment):
     context.table_ = document.tables[table_idx]
 
 
-@given('a table having an applied style')
-def given_a_table_having_an_applied_style(context):
-    docx_path = test_docx('tbl-having-applied-style')
-    document = Document(docx_path)
-    context.table_ = document.tables[0]
-
-
 @given('a table having an autofit layout of {autofit}')
 def given_a_table_having_an_autofit_layout_of_autofit(context, autofit):
     tbl_idx = {
@@ -105,6 +98,29 @@ def given_a_table_having_an_autofit_layout_of_autofit(context, autofit):
     }[autofit]
     document = Document(test_docx('tbl-props'))
     context.table_ = document.tables[tbl_idx]
+
+
+@given('a table having {style} style')
+def given_a_table_having_style(context, style):
+    table_idx = {
+        'no explicit': 0,
+        'Table Grid':  1,
+        'Light Shading - Accent 1': 2,
+    }[style]
+    document = Document(test_docx('tbl-having-applied-style'))
+    context.document = document
+    context.table_ = document.tables[table_idx]
+
+
+@given('a table having table direction set {setting}')
+def given_a_table_having_table_direction_setting(context, setting):
+    table_idx = [
+        'to inherit',
+        'right-to-left',
+        'left-to-right'
+    ].index(setting)
+    document = Document(test_docx('tbl-on-off-props'))
+    context.table_ = document.tables[table_idx]
 
 
 @given('a table having two columns')
@@ -125,22 +141,15 @@ def given_a_table_having_two_rows(context):
 
 # when =====================================================
 
-@when('I add a column to the table')
-def when_add_column_to_table(context):
-    table = context.table_
-    context.column = table.add_column()
+@when('I add a 1.0 inch column to the table')
+def when_I_add_a_1_inch_column_to_table(context):
+    context.column = context.table_.add_column(Inches(1.0))
 
 
 @when('I add a row to the table')
 def when_add_row_to_table(context):
     table = context.table_
     context.row = table.add_row()
-
-
-@when('I apply a style to the table')
-def when_apply_style_to_table(context):
-    table = context.table_
-    table.style = 'LightShading-Accent1'
 
 
 @when('I assign {value_str} to table.alignment')
@@ -153,6 +162,26 @@ def when_I_assign_value_to_table_alignment(context, value_str):
     }[value_str]
     table = context.table_
     table.alignment = value
+
+
+@when('I assign {value} to table.style')
+def when_apply_value_to_table_style(context, value):
+    table, styles = context.table_, context.document.styles
+    if value == 'None':
+        new_value = None
+    elif value.startswith('styles['):
+        new_value = styles[value.split('\'')[1]]
+    else:
+        new_value = styles[value]
+    table.style = new_value
+
+
+@when('I assign {value} to table.table_direction')
+def when_assign_value_to_table_table_direction(context, value):
+    new_value = (
+        None if value == 'None' else getattr(WD_TABLE_DIRECTION, value)
+    )
+    context.table_.table_direction = new_value
 
 
 @when('I merge from cell {origin} to cell {other}')
@@ -217,13 +246,6 @@ def then_can_access_row_collection_of_table(context):
     assert isinstance(rows, _Rows)
 
 
-@then('I can get the table style name')
-def then_can_get_table_style_name(context):
-    table = context.table_
-    msg = "got '%s'" % table.style
-    assert table.style == 'LightShading-Accent1', msg
-
-
 @then('I can iterate over the column collection')
 def then_can_iterate_over_column_collection(context):
     columns = context.columns
@@ -264,6 +286,22 @@ def then_table_cell_row_col_text_is_text(context, row, col, expected_text):
     assert cell_text == expected_text, 'got %s' % cell_text
 
 
+@then('table.style is styles[\'{style_name}\']')
+def then_table_style_is_styles_style_name(context, style_name):
+    table, styles = context.table_, context.document.styles
+    expected_style = styles[style_name]
+    assert table.style == expected_style, "got '%s'" % table.style
+
+
+@then('table.table_direction is {value}')
+def then_table_table_direction_is_value(context, value):
+    expected_value = (
+        None if value == 'None' else getattr(WD_TABLE_DIRECTION, value)
+    )
+    actual_value = context.table_.table_direction
+    assert actual_value == expected_value, "got '%s'" % actual_value
+
+
 @then('the column cells text is {expected_text}')
 def then_the_column_cells_text_is_expected_text(context, expected_text):
     table = context.table_
@@ -286,6 +324,11 @@ def then_len_of_row_collection_is_2(context):
 @then('the new column has 2 cells')
 def then_new_column_has_2_cells(context):
     assert len(context.column.cells) == 2
+
+
+@then('the new column is 1.0 inches wide')
+def then_new_column_is_1_inches_wide(context):
+    assert context.column.width == Inches(1)
 
 
 @then('the new row has 2 cells')
@@ -325,13 +368,6 @@ def then_the_row_cells_text_is_expected_text(context, encoded_text):
     assert cells_text == expected_text, 'got %s' % cells_text
 
 
-@then('the table style matches the name I applied')
-def then_table_style_matches_name_applied(context):
-    table = context.table_
-    tmpl = "table.style doesn't match, got '%s'"
-    assert table.style == 'LightShading-Accent1', tmpl % table.style
-
-
 @then('the table has {count} columns')
 def then_table_has_count_columns(context, count):
     column_count = int(count)
@@ -354,3 +390,19 @@ def then_the_width_of_cell_n_is_x_inches(context, n_str, inches_str):
     idx, inches = int(n_str) - 1, float(inches_str)
     cell = _cell(context.table_, idx)
     assert cell.width == Inches(inches), 'got %s' % cell.width.inches
+
+
+@then('the width of each cell is {inches} inches')
+def then_the_width_of_each_cell_is_inches(context, inches):
+    table = context.table_
+    expected_width = Inches(float(inches))
+    for cell in table._cells:
+        assert cell.width == expected_width, 'got %s' % cell.width.inches
+
+
+@then('the width of each column is {inches} inches')
+def then_the_width_of_each_column_is_inches(context, inches):
+    table = context.table_
+    expected_width = Inches(float(inches))
+    for column in table.columns:
+        assert column.width == expected_width, 'got %s' % column.width.inches

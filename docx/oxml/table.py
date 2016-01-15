@@ -4,7 +4,9 @@
 Custom element classes for tables
 """
 
-from __future__ import absolute_import, print_function, unicode_literals
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals
+)
 
 from . import parse_xml
 from ..exceptions import InvalidSpanError
@@ -23,6 +25,8 @@ class CT_Row(BaseOxmlElement):
     """
     ``<w:tr>`` element
     """
+    tblPrEx = ZeroOrOne('w:tblPrEx')  # custom inserter below
+    trPr = ZeroOrOne('w:trPr')        # custom inserter below
     tc = ZeroOrMore('w:tc')
 
     def tc_at_grid_col(self, idx):
@@ -47,6 +51,16 @@ class CT_Row(BaseOxmlElement):
         """
         return self.getparent().tr_lst.index(self)
 
+    def _insert_tblPrEx(self, tblPrEx):
+        self.insert(0, tblPrEx)
+
+    def _insert_trPr(self, trPr):
+        tblPrEx = self.tblPrEx
+        if tblPrEx is not None:
+            tblPrEx.addnext(trPr)
+        else:
+            self.insert(0, trPr)
+
     def _new_tc(self):
         return CT_Tc.new()
 
@@ -59,6 +73,33 @@ class CT_Tbl(BaseOxmlElement):
     tblGrid = OneAndOnlyOne('w:tblGrid')
     tr = ZeroOrMore('w:tr')
 
+    @property
+    def bidiVisual_val(self):
+        """
+        Value of `w:tblPr/w:bidiVisual/@w:val` or |None| if not present.
+        Controls whether table cells are displayed right-to-left or
+        left-to-right.
+        """
+        bidiVisual = self.tblPr.bidiVisual
+        if bidiVisual is None:
+            return None
+        return bidiVisual.val
+
+    @bidiVisual_val.setter
+    def bidiVisual_val(self, value):
+        tblPr = self.tblPr
+        if value is None:
+            tblPr._remove_bidiVisual()
+        else:
+            tblPr.get_or_add_bidiVisual().val = value
+
+    @property
+    def col_count(self):
+        """
+        The number of grid columns in this table.
+        """
+        return len(self.tblGrid.gridCol_lst)
+
     def iter_tcs(self):
         """
         Generate each of the `w:tc` elements in this table, left to right and
@@ -70,31 +111,88 @@ class CT_Tbl(BaseOxmlElement):
                 yield tc
 
     @classmethod
-    def new(cls):
+    def new_tbl(cls, rows, cols, width):
         """
-        Return a new ``<w:tbl>`` element, containing the required
-        ``<w:tblPr>`` and ``<w:tblGrid>`` child elements.
+        Return a new `w:tbl` element having *rows* rows and *cols* columns
+        with *width* distributed evenly between the columns.
         """
-        tbl = parse_xml(cls._tbl_xml())
-        return tbl
+        return parse_xml(cls._tbl_xml(rows, cols, width))
 
     @property
-    def col_count(self):
+    def tblStyle_val(self):
         """
-        The number of grid columns in this table.
+        Value of `w:tblPr/w:tblStyle/@w:val` (a table style id) or |None| if
+        not present.
         """
-        return len(self.tblGrid.gridCol_lst)
+        tblStyle = self.tblPr.tblStyle
+        if tblStyle is None:
+            return None
+        return tblStyle.val
+
+    @tblStyle_val.setter
+    def tblStyle_val(self, styleId):
+        """
+        Set the value of `w:tblPr/w:tblStyle/@w:val` (a table style id) to
+        *styleId*. If *styleId* is None, remove the `w:tblStyle` element.
+        """
+        tblPr = self.tblPr
+        tblPr._remove_tblStyle()
+        if styleId is None:
+            return
+        tblPr._add_tblStyle().val = styleId
 
     @classmethod
-    def _tbl_xml(cls):
+    def _tbl_xml(cls, rows, cols, width):
+        col_width = Emu(width/cols) if cols > 0 else Emu(0)
         return (
             '<w:tbl %s>\n'
             '  <w:tblPr>\n'
             '    <w:tblW w:type="auto" w:w="0"/>\n'
+            '    <w:tblLook w:firstColumn="1" w:firstRow="1"\n'
+            '               w:lastColumn="0" w:lastRow="0" w:noHBand="0"\n'
+            '               w:noVBand="1" w:val="04A0"/>\n'
             '  </w:tblPr>\n'
-            '  <w:tblGrid/>\n'
-            '</w:tbl>' % nsdecls('w')
+            '%s'  # tblGrid
+            '%s'  # trs
+            '</w:tbl>\n'
+        ) % (
+            nsdecls('w'),
+            cls._tblGrid_xml(cols, col_width),
+            cls._trs_xml(rows, cols, col_width)
         )
+
+    @classmethod
+    def _tblGrid_xml(cls, col_count, col_width):
+        xml = '  <w:tblGrid>\n'
+        for i in range(col_count):
+            xml += '    <w:gridCol w:w="%d"/>\n' % col_width.twips
+        xml += '  </w:tblGrid>\n'
+        return xml
+
+    @classmethod
+    def _trs_xml(cls, row_count, col_count, col_width):
+        xml = ''
+        for i in range(row_count):
+            xml += (
+                '  <w:tr>\n'
+                '%s'
+                '  </w:tr>\n'
+            ) % cls._tcs_xml(col_count, col_width)
+        return xml
+
+    @classmethod
+    def _tcs_xml(cls, col_count, col_width):
+        xml = ''
+        for i in range(col_count):
+            xml += (
+                '    <w:tc>\n'
+                '      <w:tcPr>\n'
+                '        <w:tcW w:type="dxa" w:w="%d"/>\n'
+                '      </w:tcPr>\n'
+                '      <w:p/>\n'
+                '    </w:tc>\n'
+            ) % col_width.twips
+        return xml
 
 
 class CT_TblGrid(BaseOxmlElement):
@@ -142,6 +240,7 @@ class CT_TblPr(BaseOxmlElement):
         'w:tblDescription', 'w:tblPrChange'
     )
     tblStyle = ZeroOrOne('w:tblStyle', successors=_tag_seq[1:])
+    bidiVisual = ZeroOrOne('w:bidiVisual', successors=_tag_seq[4:])
     jc = ZeroOrOne('w:jc', successors=_tag_seq[8:])
     tblLayout = ZeroOrOne('w:tblLayout', successors=_tag_seq[13:])
     del _tag_seq

@@ -8,8 +8,14 @@ can be found here:
 .. toctree::
    :titlesonly:
 
+   MsoColorType
+   MsoThemeColorIndex
    WdAlignParagraph
+   WdBuiltinStyle
+   WdLineSpacing
    WdOrientation
    WdSectionStart
+   WdStyleType
    WdRowAlignment
+   WdTableDirection
    WdUnderline

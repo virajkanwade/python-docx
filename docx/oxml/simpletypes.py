@@ -6,10 +6,12 @@ stored in XML element attributes. Naming generally corresponds to the simple
 type in the associated XML schema.
 """
 
-from __future__ import absolute_import, print_function
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals
+)
 
 from ..exceptions import InvalidXmlError
-from ..shared import Emu, Twips
+from ..shared import Emu, Pt, RGBColor, Twips
 
 
 class BaseSimpleType(object):
@@ -235,6 +237,58 @@ class ST_DrawingElementId(XsdUnsignedInt):
     pass
 
 
+class ST_HexColor(BaseStringType):
+
+    @classmethod
+    def convert_from_xml(cls, str_value):
+        if str_value == 'auto':
+            return ST_HexColorAuto.AUTO
+        return RGBColor.from_string(str_value)
+
+    @classmethod
+    def convert_to_xml(cls, value):
+        """
+        Keep alpha hex numerals all uppercase just for consistency.
+        """
+        # expecting 3-tuple of ints in range 0-255
+        return '%02X%02X%02X' % value
+
+    @classmethod
+    def validate(cls, value):
+        # must be an RGBColor object ---
+        if not isinstance(value, RGBColor):
+            raise ValueError(
+                "rgb color value must be RGBColor object, got %s %s"
+                % (type(value), value)
+            )
+
+
+class ST_HexColorAuto(XsdStringEnumeration):
+    """
+    Value for `w:color/[@val="auto"] attribute setting
+    """
+    AUTO = 'auto'
+
+    _members = (AUTO,)
+
+
+class ST_HpsMeasure(XsdUnsignedLong):
+    """
+    Half-point measure, e.g. 24.0 represents 12.0 points.
+    """
+    @classmethod
+    def convert_from_xml(cls, str_value):
+        if 'm' in str_value or 'n' in str_value or 'p' in str_value:
+            return ST_UniversalMeasure.convert_from_xml(str_value)
+        return Pt(int(str_value)/2.0)
+
+    @classmethod
+    def convert_to_xml(cls, value):
+        emu = Emu(value)
+        half_points = int(emu.pt * 2)
+        return str(half_points)
+
+
 class ST_Merge(XsdStringEnumeration):
     """
     Valid values for <w:xMerge val=""> attribute
@@ -342,3 +396,14 @@ class ST_UniversalMeasure(BaseSimpleType):
         }[units_part]
         emu_value = Emu(int(round(quantity * multiplier)))
         return emu_value
+
+
+class ST_VerticalAlignRun(XsdStringEnumeration):
+    """
+    Valid values for `w:vertAlign/@val`.
+    """
+    BASELINE = 'baseline'
+    SUPERSCRIPT = 'superscript'
+    SUBSCRIPT = 'subscript'
+
+    _members = (BASELINE, SUPERSCRIPT, SUBSCRIPT)

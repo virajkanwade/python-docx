@@ -8,14 +8,9 @@ from behave import given, then, when
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import parse_xml
-from docx.oxml.ns import nsdecls
-from docx.text import Paragraph
+from docx.text.parfmt import ParagraphFormat
 
 from helpers import saved_docx_path, test_docx, test_text
-
-
-TEST_STYLE = 'Heading1'
 
 
 # given ===================================================
@@ -42,19 +37,22 @@ def given_a_paragraph_align_type_alignment(context, align_type):
     context.paragraph = document.paragraphs[paragraph_idx]
 
 
+@given('a paragraph having {style_state} style')
+def given_a_paragraph_having_style(context, style_state):
+    paragraph_idx = {
+        'no specified': 0,
+        'a missing':    1,
+        'Heading 1':    2,
+        'Body Text':    3,
+    }[style_state]
+    document = context.document = Document(test_docx('par-known-styles'))
+    context.paragraph = document.paragraphs[paragraph_idx]
+
+
 @given('a paragraph with content and formatting')
 def given_a_paragraph_with_content_and_formatting(context):
-    p_xml = """\
-        <w:p %s>
-          <w:pPr>
-            <w:pStyle w:val="%s"/>
-          </w:pPr>
-          <w:r>
-            <w:t>foobar</w:t>
-          </w:r>
-        </w:p>""" % (nsdecls('w'), TEST_STYLE)
-    p = parse_xml(p_xml)
-    context.paragraph = Paragraph(p, None)
+    document = Document(test_docx('par-known-paragraphs'))
+    context.paragraph = document.paragraphs[0]
 
 
 # when ====================================================
@@ -62,6 +60,17 @@ def given_a_paragraph_with_content_and_formatting(context):
 @when('I add a run to the paragraph')
 def when_add_new_run_to_paragraph(context):
     context.run = context.p.add_run()
+
+
+@when('I assign a {style_type} to paragraph.style')
+def when_I_assign_a_style_type_to_paragraph_style(context, style_type):
+    paragraph = context.paragraph
+    style = context.style = context.document.styles['Heading 1']
+    style_spec = {
+        'style object': style,
+        'style name':   'Heading 1',
+    }[style_type]
+    paragraph.style = style_spec
 
 
 @when('I clear the paragraph content')
@@ -75,18 +84,32 @@ def when_I_insert_a_paragraph_above_the_second_paragraph(context):
     paragraph.insert_paragraph_before('foobar', 'Heading1')
 
 
-@when('I set the paragraph style')
-def when_I_set_the_paragraph_style(context):
-    context.paragraph.add_run().add_text(test_text)
-    context.paragraph.style = TEST_STYLE
-
-
 @when('I set the paragraph text')
 def when_I_set_the_paragraph_text(context):
     context.paragraph.text = 'bar\tfoo\r'
 
 
 # then =====================================================
+
+@then('paragraph.paragraph_format is its ParagraphFormat object')
+def then_paragraph_paragraph_format_is_its_parfmt_object(context):
+    paragraph = context.paragraph
+    paragraph_format = paragraph.paragraph_format
+    assert isinstance(paragraph_format, ParagraphFormat)
+    assert paragraph_format.element is paragraph._element
+
+
+@then('paragraph.style is {value_key}')
+def then_paragraph_style_is_value(context, value_key):
+    styles = context.document.styles
+    expected_value = {
+        'Normal':    styles['Normal'],
+        'Heading 1': styles['Heading 1'],
+        'Body Text': styles['Body Text'],
+    }[value_key]
+    paragraph = context.paragraph
+    assert paragraph.style == expected_value
+
 
 @then('the document contains four paragraphs')
 def then_the_document_contains_four_paragraphs(context):
@@ -115,7 +138,8 @@ def then_the_paragraph_alignment_prop_value_is_value(context, align_value):
 
 @then('the paragraph formatting is preserved')
 def then_the_paragraph_formatting_is_preserved(context):
-    assert context.paragraph.style == TEST_STYLE
+    paragraph = context.paragraph
+    assert paragraph.style.name == 'Heading 1'
 
 
 @then('the paragraph has no content')
@@ -125,8 +149,8 @@ def then_the_paragraph_has_no_content(context):
 
 @then('the paragraph has the style I set')
 def then_the_paragraph_has_the_style_I_set(context):
-    paragraph = Document(saved_docx_path).paragraphs[-1]
-    assert paragraph.style == TEST_STYLE
+    paragraph, expected_style = context.paragraph, context.style
+    assert paragraph.style == expected_style
 
 
 @then('the paragraph has the text I set')
@@ -137,7 +161,7 @@ def then_the_paragraph_has_the_text_I_set(context):
 @then('the style of the second paragraph matches the style I set')
 def then_the_style_of_the_second_paragraph_matches_the_style_I_set(context):
     second_paragraph = context.document.paragraphs[1]
-    assert second_paragraph.style == 'Heading1'
+    assert second_paragraph.style.name == 'Heading 1'
 
 
 @then('the text of the second paragraph matches the text I set')

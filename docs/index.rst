@@ -68,11 +68,12 @@ User Guide
    user/install
    user/quickstart
    user/documents
+   user/text
    user/sections
    user/api-concepts
-   user/styles
+   user/styles-understanding
+   user/styles-using
    user/shapes
-   user/text
 
 
 API Documentation
@@ -82,10 +83,12 @@ API Documentation
    :maxdepth: 2
 
    api/document
-   api/table
+   api/style
    api/text
+   api/table
    api/section
    api/shape
+   api/dml
    api/shared
    api/enum/index
 

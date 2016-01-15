@@ -17,7 +17,7 @@ class Length(int):
     _EMUS_PER_INCH = 914400
     _EMUS_PER_CM = 360000
     _EMUS_PER_MM = 36000
-    _EMUS_PER_PX = 12700
+    _EMUS_PER_PT = 12700
     _EMUS_PER_TWIP = 635
 
     def __new__(cls, emu):
@@ -52,10 +52,11 @@ class Length(int):
         return self / float(self._EMUS_PER_MM)
 
     @property
-    def px(self):
-        # round can somtimes return values like x.999999 which are truncated
-        # to x by int(); adding the 0.1 prevents this
-        return int(round(self / float(self._EMUS_PER_PX)) + 0.1)
+    def pt(self):
+        """
+        Floating point length in points
+        """
+        return self / float(self._EMUS_PER_PT)
 
     @property
     def twips(self):
@@ -104,23 +105,12 @@ class Mm(Length):
         return Length.__new__(cls, emu)
 
 
-class Pt(int):
+class Pt(Length):
     """
-    Convenience class for setting font sizes in points
+    Convenience value class for specifying a length in points
     """
-    _UNITS_PER_POINT = 100
-
-    def __new__(cls, pts):
-        units = int(pts * Pt._UNITS_PER_POINT)
-        return int.__new__(cls, units)
-
-
-class Px(Length):
-    """
-    Convenience constructor for length in pixels.
-    """
-    def __new__(cls, px):
-        emu = int(px * Length._EMUS_PER_PX)
+    def __new__(cls, points):
+        emu = int(points * Length._EMUS_PER_PT)
         return Length.__new__(cls, emu)
 
 
@@ -132,6 +122,37 @@ class Twips(Length):
     def __new__(cls, twips):
         emu = int(twips * Length._EMUS_PER_TWIP)
         return Length.__new__(cls, emu)
+
+
+class RGBColor(tuple):
+    """
+    Immutable value object defining a particular RGB color.
+    """
+    def __new__(cls, r, g, b):
+        msg = 'RGBColor() takes three integer values 0-255'
+        for val in (r, g, b):
+            if not isinstance(val, int) or val < 0 or val > 255:
+                raise ValueError(msg)
+        return super(RGBColor, cls).__new__(cls, (r, g, b))
+
+    def __repr__(self):
+        return 'RGBColor(0x%02x, 0x%02x, 0x%02x)' % self
+
+    def __str__(self):
+        """
+        Return a hex string rgb value, like '3C2F80'
+        """
+        return '%02X%02X%02X' % self
+
+    @classmethod
+    def from_string(cls, rgb_hex_str):
+        """
+        Return a new instance from an RGB color hex string like ``'3C2F80'``.
+        """
+        r = int(rgb_hex_str[:2], 16)
+        g = int(rgb_hex_str[2:4], 16)
+        b = int(rgb_hex_str[4:], 16)
+        return cls(r, g, b)
 
 
 def lazyproperty(f):
@@ -162,6 +183,52 @@ def write_only_property(f):
     docstring = f.__doc__
 
     return property(fset=f, doc=docstring)
+
+
+class ElementProxy(object):
+    """
+    Base class for lxml element proxy classes. An element proxy class is one
+    whose primary responsibilities are fulfilled by manipulating the
+    attributes and child elements of an XML element. They are the most common
+    type of class in python-docx other than custom element (oxml) classes.
+    """
+
+    __slots__ = ('_element', '_parent')
+
+    def __init__(self, element, parent=None):
+        self._element = element
+        self._parent = parent
+
+    def __eq__(self, other):
+        """
+        Return |True| if this proxy object refers to the same oxml element as
+        does *other*. ElementProxy objects are value objects and should
+        maintain no mutable local state. Equality for proxy objects is
+        defined as referring to the same XML element, whether or not they are
+        the same proxy object instance.
+        """
+        if not isinstance(other, ElementProxy):
+            return False
+        return self._element is other._element
+
+    def __ne__(self, other):
+        if not isinstance(other, ElementProxy):
+            return True
+        return self._element is not other._element
+
+    @property
+    def element(self):
+        """
+        The lxml element proxied by this object.
+        """
+        return self._element
+
+    @property
+    def part(self):
+        """
+        The package part containing this object
+        """
+        return self._parent.part
 
 
 class Parented(object):

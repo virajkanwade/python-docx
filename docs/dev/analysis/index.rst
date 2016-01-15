@@ -8,25 +8,21 @@ Feature Analysis
 ----------------
 
 .. toctree::
-   :maxdepth: 1
+   :titlesonly:
 
+   features/text/index
+   features/styles/index
    features/coreprops
    features/cell-merge
    features/table
    features/table-props
    features/table-cell
-   features/par-alignment
-   features/run-content
    features/numbering
-   features/underline
-   features/char-style
-   features/breaks
    features/sections
    features/shapes
    features/shapes-inline
    features/shapes-inline-size
    features/picture
-   features/bool-run-props
 
 
 Schema Analysis
@@ -41,5 +37,3 @@ ISO/IEC 29500 spec.
    schema/ct_document
    schema/ct_body
    schema/ct_p
-   schema/ct_ppr
-   schema/ct_styles

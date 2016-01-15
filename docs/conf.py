@@ -69,25 +69,43 @@ release = __version__
 rst_epilog = """
 .. |api-Document| replace:: :class:`docx.api.Document`
 
-.. |_Body| replace:: :class:`_Body`
+.. |AttributeError| replace:: :exc:`.AttributeError`
 
-.. |_Cell| replace:: :class:`_Cell`
+.. |BaseStyle| replace:: :class:`.BaseStyle`
 
-.. |_Column| replace:: :class:`_Column`
+.. |_Body| replace:: :class:`._Body`
 
-.. |_Columns| replace:: :class:`_Columns`
+.. |_Cell| replace:: :class:`._Cell`
+
+.. |_CharacterStyle| replace:: :class:`._CharacterStyle`
+
+.. |Cm| replace:: :class:`.Cm`
+
+.. |ColorFormat| replace:: :class:`.ColorFormat`
+
+.. |_Column| replace:: :class:`._Column`
+
+.. |_Columns| replace:: :class:`._Columns`
 
 .. |CoreProperties| replace:: :class:`.CoreProperties`
 
-.. |datetime| replace:: :class:`datetime.datetime`
+.. |datetime| replace:: :class:`.datetime.datetime`
 
 .. |Document| replace:: :class:`.Document`
+
+.. |DocumentPart| replace:: :class:`.DocumentPart`
 
 .. |docx| replace:: ``python-docx``
 
 .. |Emu| replace:: :class:`.Emu`
 
-.. |False| replace:: ``False``
+.. |False| replace:: :class:`False`
+
+.. |float| replace:: :class:`.float`
+
+.. |Font| replace:: :class:`.Font`
+
+.. |Inches| replace:: :class:`.Inches`
 
 .. |InlineShape| replace:: :class:`.InlineShape`
 
@@ -95,43 +113,61 @@ rst_epilog = """
 
 .. |InvalidSpanError| replace:: :class:`.InvalidSpanError`
 
-.. |int| replace:: :class:`int`
+.. |int| replace:: :class:`.int`
+
+.. |_LatentStyle| replace:: :class:`._LatentStyle`
+
+.. |LatentStyles| replace:: :class:`.LatentStyles`
 
 .. |Length| replace:: :class:`.Length`
 
-.. |OpcPackage| replace:: :class:`OpcPackage`
+.. |None| replace:: :class:`.None`
 
-.. |None| replace:: ``None``
+.. |NumberingPart| replace:: :class:`.NumberingPart`
 
-.. |NumberingPart| replace:: :class:`NumberingPart`
+.. |_NumberingStyle| replace:: :class:`._NumberingStyle`
+
+.. |OpcPackage| replace:: :class:`.OpcPackage`
 
 .. |Paragraph| replace:: :class:`.Paragraph`
 
-.. |Part| replace:: :class:`Part`
+.. |ParagraphFormat| replace:: :class:`.ParagraphFormat`
 
-.. |_Relationship| replace:: :class:`_Relationship`
+.. |_ParagraphStyle| replace:: :class:`._ParagraphStyle`
 
-.. |Relationships| replace:: :class:`_Relationships`
+.. |Part| replace:: :class:`.Part`
 
-.. |_Row| replace:: :class:`_Row`
+.. |Pt| replace:: :class:`.Pt`
 
-.. |_Rows| replace:: :class:`_Rows`
+.. |_Relationship| replace:: :class:`._Relationship`
 
-.. |Run| replace:: :class:`Run`
+.. |Relationships| replace:: :class:`._Relationships`
+
+.. |RGBColor| replace:: :class:`.RGBColor`
+
+.. |_Row| replace:: :class:`._Row`
+
+.. |_Rows| replace:: :class:`._Rows`
+
+.. |Run| replace:: :class:`.Run`
 
 .. |Section| replace:: :class:`.Section`
 
 .. |Sections| replace:: :class:`.Sections`
 
-.. |str| replace:: :class:`str`
+.. |str| replace:: :class:`.str`
+
+.. |Styles| replace:: :class:`.Styles`
 
 .. |StylesPart| replace:: :class:`.StylesPart`
 
 .. |Table| replace:: :class:`.Table`
 
-.. |Text| replace:: :class:`Text`
+.. |_TableStyle| replace:: :class:`._TableStyle`
 
-.. |True| replace:: ``True``
+.. |_Text| replace:: :class:`._Text`
+
+.. |True| replace:: :class:`True`
 
 .. |ValueError| replace:: :class:`ValueError`
 """

@@ -10,8 +10,41 @@ from __future__ import (
 )
 
 from .enum.shape import WD_INLINE_SHAPE
-from .oxml.shape import CT_Inline, CT_Picture
 from .oxml.ns import nsmap
+from .shared import Parented
+
+
+class InlineShapes(Parented):
+    """
+    Sequence of |InlineShape| instances, supporting len(), iteration, and
+    indexed access.
+    """
+    def __init__(self, body_elm, parent):
+        super(InlineShapes, self).__init__(parent)
+        self._body = body_elm
+
+    def __getitem__(self, idx):
+        """
+        Provide indexed access, e.g. 'inline_shapes[idx]'
+        """
+        try:
+            inline = self._inline_lst[idx]
+        except IndexError:
+            msg = "inline shape index [%d] out of range" % idx
+            raise IndexError(msg)
+        return InlineShape(inline)
+
+    def __iter__(self):
+        return (InlineShape(inline) for inline in self._inline_lst)
+
+    def __len__(self):
+        return len(self._inline_lst)
+
+    @property
+    def _inline_lst(self):
+        body = self._body
+        xpath = '//w:p/w:r/w:drawing/wp:inline'
+        return body.xpath(xpath)
 
 
 class InlineShape(object):
@@ -33,25 +66,8 @@ class InlineShape(object):
 
     @height.setter
     def height(self, cy):
-        assert isinstance(cy, int)
-        assert 0 < cy
         self._inline.extent.cy = cy
-
-    @classmethod
-    def new_picture(cls, r, image_part, rId, shape_id):
-        """
-        Return a new |InlineShape| instance containing an inline picture
-        placement of *image_part* appended to run *r* and uniquely identified
-        by *shape_id*.
-        """
-        cx, cy, filename = (
-            image_part.default_cx, image_part.default_cy, image_part.filename
-        )
-        pic_id = 0
-        pic = CT_Picture.new(pic_id, filename, rId, cx, cy)
-        inline = CT_Inline.new(cx, cy, shape_id, pic)
-        r.add_drawing(inline)
-        return cls(inline)
+        self._inline.graphic.graphicData.pic.spPr.cy = cy
 
     @property
     def type(self):
@@ -83,6 +99,5 @@ class InlineShape(object):
 
     @width.setter
     def width(self, cx):
-        assert isinstance(cx, int)
-        assert 0 < cx
         self._inline.extent.cx = cx
+        self._inline.graphic.graphicData.pic.spPr.cx = cx
